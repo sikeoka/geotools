@@ -70,6 +70,15 @@ final class LiteFeatureTypeStyle {
      */
     public boolean rtOversample;
 
+    /**
+     * When true, input coverages will be reprojected to the map projection before applying rendering transformations.
+     * This is generally the desired behavior as it will usually produce more useful output that is compatible with
+     * advanced projection handling and continuous map wrapping but this may cause problems with rendering
+     * transformation that rely on the WMS scale denominator such as RasterAsPointCollection when supporting multiple
+     * map projections.
+     */
+    public boolean reprojectBeforeTransform = true;
+
     /** When true, the first matching rule will be applied, skipping the others */
     boolean matchFirst = false;
 

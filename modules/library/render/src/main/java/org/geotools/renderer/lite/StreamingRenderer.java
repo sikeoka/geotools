@@ -103,6 +103,7 @@ import org.geotools.api.style.TextSymbolizer;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.coverage.grid.GridEnvelope2D;
 import org.geotools.coverage.grid.GridGeometry2D;
+import org.geotools.coverage.grid.InvalidGridGeometryException;
 import org.geotools.coverage.grid.io.GridCoverage2DReader;
 import org.geotools.coverage.util.FeatureUtilities;
 import org.geotools.data.DataUtilities;
@@ -149,6 +150,7 @@ import org.geotools.renderer.crs.ProjectionHandlerFinder;
 import org.geotools.renderer.crs.WrappingProjectionHandler;
 import org.geotools.renderer.label.LabelCacheImpl;
 import org.geotools.renderer.label.LabelCacheImpl.LabelRenderingMode;
+import org.geotools.renderer.lite.gridcoverage2d.GridCoverageReaderHelper;
 import org.geotools.renderer.lite.gridcoverage2d.GridCoverageRenderer;
 import org.geotools.renderer.style.LineStyle2D;
 import org.geotools.renderer.style.MarkAlongLine;
@@ -1922,6 +1924,10 @@ public class StreamingRenderer implements GTRenderer {
                 // check if the rendering transformations should be oversampled
                 lfts.rtOversample = Boolean.valueOf(fts.getOptions().get(FeatureTypeStyle.RT_OVERASAMPLE));
 
+                // check if reprojecting the input coverage should be disabled (default to true)
+                lfts.reprojectBeforeTransform =
+                        !"false".equalsIgnoreCase(fts.getOptions().get("reprojectBeforeTransform"));
+
                 if (screenMapEnabled(lfts)) {
                     int renderingBuffer = getRenderingBuffer();
                     lfts.screenMap = new ScreenMap(
@@ -2193,6 +2199,7 @@ public class StreamingRenderer implements GTRenderer {
             // so they have to be applied before and after the transformation respectively
             RenderingTransformationHelper helper = new GCRRenderingTransformationHelper(layer);
             helper.setOversampleEnabled(fts.rtOversample);
+            helper.setReprojectBeforeTransform(fts.reprojectBeforeTransform);
 
             Object result = helper.applyRenderingTransformation(
                     transform, featureSource, definitionQuery, styleQuery, gridGeometry, sourceCrs, java2dHints);
@@ -4038,6 +4045,20 @@ public class StreamingRenderer implements GTRenderer {
         protected GridCoverage2D readCoverage(GridCoverage2DReader reader, Object readParams, GridGeometry2D readGG)
                 throws IOException {
             Interpolation interpolation = getRenderingInterpolation(layer);
+            if (!reprojectBeforeTransform) {
+                // read the coverage in its native projection
+                try {
+                    GridCoverageReaderHelper helper = new GridCoverageReaderHelper(
+                            reader,
+                            readGG.getGridRange2D(),
+                            ReferencedEnvelope.reference(readGG.getEnvelope2D()),
+                            interpolation);
+                    return helper.readCoverage((GeneralParameterValue[]) readParams);
+                } catch (InvalidGridGeometryException | FactoryException e) {
+                    throw new IOException("Failure reading the coverage", e);
+                }
+            }
+            // read the coverage that is reprojected to the map projection
             RenderingHints interpolationHints = new RenderingHints(JAI.KEY_INTERPOLATION, interpolation);
             final GridCoverageRenderer gcr;
 

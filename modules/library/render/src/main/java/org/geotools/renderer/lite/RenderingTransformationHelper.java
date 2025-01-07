@@ -93,6 +93,15 @@ public abstract class RenderingTransformationHelper {
      */
     protected boolean oversample;
 
+    /**
+     * When true, input coverages will be reprojected to the map projection before applying rendering transformations.
+     * This is generally the desired behavior as it will usually produce more useful output that is compatible with
+     * advanced projection handling and continuous map wrapping but this may cause problems with rendering
+     * transformation that rely on the WMS scale denominator such as RasterAsPointCollection when supporting multiple
+     * map projections.
+     */
+    protected boolean reprojectBeforeTransform = true;
+
     public Object applyRenderingTransformation(
             Expression transformation,
             FeatureSource featureSource,
@@ -261,9 +270,12 @@ public abstract class RenderingTransformationHelper {
                 }
             }
 
-            if (transformation instanceof RenderingTransformation) {
+            if (coverage != null && transformation instanceof RenderingTransformation) {
                 RenderingTransformation tx = (RenderingTransformation) transformation;
-                if (tx.clipOnRenderingArea() && originalRendingEnvelope != null) {
+                CoordinateReferenceSystem coverageCRS = coverage.getCoordinateReferenceSystem2D();
+                if (tx.clipOnRenderingArea()
+                        && originalRendingEnvelope != null
+                        && CRS.isEquivalent(coverageCRS, originalRendingEnvelope.getCoordinateReferenceSystem())) {
                     // clip the coverage to the rendering area
                     coverage = cropCoverage(coverage, originalRendingEnvelope);
                 }
@@ -338,5 +350,9 @@ public abstract class RenderingTransformationHelper {
 
     public void setOversampleEnabled(boolean oversample) {
         this.oversample = oversample;
+    }
+
+    public void setReprojectBeforeTransform(boolean reprojectBeforeTransform) {
+        this.reprojectBeforeTransform = reprojectBeforeTransform;
     }
 }
